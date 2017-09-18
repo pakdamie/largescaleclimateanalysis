@@ -52,9 +52,20 @@ mvrmCM_VIP$Month <- factor(mvrmCM_VIP$Month,
 
 ggplot(mvrmCM_VIP, aes(x= Month,y= VIP, fill = greater))+
   geom_bar(stat= 'identity')+geom_hline(yintercept = 1)+
-  scale_fill_manual(values = c('grey','red'))+theme_bw()  
+  scale_fill_manual(values = c('grey','red'))+
+  guides(fill=FALSE)+theme_Publication()+
+theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  ggtitle("Cydia Pomonella")
 
 
+###Regression coefficent for monthly temperatures
+
+
+RC_CM_M<-data.frame(mvrmCM_VIP$Month,
+                         RC(mvr_mCM, opt.comp=1))
+colnames(RC_CM_M)<- c("Month","RC")
+
+RC_VIP_CM_M <- cbind.data.frame(mvrmCM_VIP[,2:3], RC_CM_M[,2:3])
 
 
 
