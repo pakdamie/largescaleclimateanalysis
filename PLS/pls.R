@@ -6,6 +6,59 @@ require(scales)
 #####################################
 ###Partial least squares analysis###
 #####################################
+##################################
+####Monthly temperatures##########
+##################################
+
+M_PLS_CM <- subset(temp.main.dat2, temp.main.dat2$year > 1982 &
+                     temp.main.dat2$year < 2017)
+rownames(M_PLS_CM)<- seq(1, nrow(M_PLS_CM))
+
+M_PLS_CM <- M_PLS_CM[-c(1:243),]
+rownames(M_PLS_CM)<- seq(1, nrow(M_PLS_CM))
+
+M_PLS_CM <- M_PLS_CM[-c(11931:12175),]
+CM_TEMP_M <- subset(M_PLS_CM, M_PLS_CM$month != 5 &
+                      M_PLS_CM$month != 6 &
+                      M_PLS_CM$month != 7&
+                      M_PLS_CM$month != 8)
+
+CM_TEMP_M_agg <- aggregate(CM_TEMP_M$tmin, by = list(CM_TEMP_M$month,
+                                                     CM_TEMP_M$year),
+                           'mean')
+
+
+CAST_CM_TEMP<-dcast(CM_TEMP_M_agg ,
+                          Group.2~ Group.1)
+
+CM_WINT<-na.omit(CAST_CM_TEMP[,6:9])
+CM_SPRING<- na.omit(CAST_CM_TEMP[,2:5])
+
+CM_ALL_M_CAST<-cbind(CM.first.spring$julian,
+              seq(1984, 2016), CM_WINT,CM_SPRING)
+colnames(CM_ALL_M_CAST)[1:2] <- c("Julian","Year")
+
+mvr_mCM<- mvr(Julian~., data =CM_ALL_M_CAST[,c(1, 3:10)],validation='CV',scale=TRUE,method="oscorespls")
+summary(mvr_mCM)
+mvrmCM_VIP<-cbind.data.frame(c("Sep","Oct","Nov","Dec",
+                               "Jan","Feb","Mar","Apr"),
+                            VIP(mvr_mCM,opt.comp=1))
+colnames(mvrmCM_VIP) <- c('Month','VIP')
+mvrmCM_VIP$greater <- ifelse(mvrmCM_VIP$VIP > 1, TRUE, FALSE)
+
+mvrmCM_VIP$Month <- as.character(mvrmCM_VIP$Month)
+mvrmCM_VIP$Month <- factor(mvrmCM_VIP$Month, 
+                           levels = unique(mvrmCM_VIP$Month))
+
+ggplot(mvrmCM_VIP, aes(x= Month,y= VIP, fill = greater))+
+  geom_bar(stat= 'identity')+geom_hline(yintercept = 1)+
+  scale_fill_manual(values = c('grey','red'))+theme_bw()  
+
+
+
+
+
+
 ########################
 ###Daily temperatures###
 ########################
