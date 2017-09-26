@@ -3,6 +3,9 @@ require(pls)
 require(plsVarSel)
 require(ggplot2)
 require(scales)
+library(gridExtra)
+library(matrixStats)
+
 #####################################
 ###Partial least squares analysis###
 #####################################
@@ -50,22 +53,111 @@ mvrmCM_VIP$Month <- as.character(mvrmCM_VIP$Month)
 mvrmCM_VIP$Month <- factor(mvrmCM_VIP$Month, 
                            levels = unique(mvrmCM_VIP$Month))
 
-ggplot(mvrmCM_VIP, aes(x= Month,y= VIP, fill = greater))+
+M_VIP_CM<-ggplot(mvrmCM_VIP, aes(x= Month,y= VIP, fill = greater))+
   geom_bar(stat= 'identity')+geom_hline(yintercept = 1)+
-  scale_fill_manual(values = c('grey','red'))+
+  scale_fill_manual(values = c('gray84','seagreen4'))+
   guides(fill=FALSE)+theme_Publication()+
 theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
   ggtitle("Cydia Pomonella")
+####################################################
+###Regression coefficent for monthly temperatures###
+####################################################
 
-
-###Regression coefficent for monthly temperatures
-
-
-RC_CM_M<-data.frame(mvrmCM_VIP$Month,
+RC_CM_M<-cbind.data.frame(mvrmCM_VIP$Month,
                          RC(mvr_mCM, opt.comp=1))
 colnames(RC_CM_M)<- c("Month","RC")
 
-RC_VIP_CM_M <- cbind.data.frame(mvrmCM_VIP[,2:3], RC_CM_M[,2:3])
+plot(RC_CM_M$Month, RC_CM_M$RC)
+
+RC_VIP_CM_M <- cbind.data.frame(mvrmCM_VIP[,2:3], RC_CM_M)
+
+RC_VIP_CM_M$negopos<- 'insig'
+RC_VIP_CM_M$negopos[RC_VIP_CM_M$greater == TRUE & RC_VIP_CM_M$RC > 0 ]<- 'POS'
+RC_VIP_CM_M$negopos[RC_VIP_CM_M$greater == TRUE & 
+                      RC_VIP_CM_M$RC < 0 ]<- 'NEG'
+
+M_RC_CM <- ggplot(RC_VIP_CM_M, aes(x= Month, y= RC))+ 
+  geom_bar(aes(fill = negopos),stat='identity')+
+  scale_fill_manual(values = c('gray84','dodgerblue4','firebrick3'))+
+  theme_Publication()+
+  geom_hline(yintercept = 0)+
+  guides(fill=FALSE)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+grid.arrange(M_VIP_CM, M_RC_CM,ncol=1)
+
+
+###Third graph showing the average temperature with the standard error
+###bar
+
+colMeans(CM_ALL_M_CAST)[3:10]
+
+colSds(as.matrix(CM_ALL_M_CAST))[3:10]
+
+nrow(CM_ALL_M_CAST) #33
+
+se_CM_month <- colSds(as.matrix(CM_ALL_M_CAST))[3:10]/sqrt(33)
+
+se_month_CM <- cbind.data.frame(c("Sep","Oct","Nov","Dec","Jan","Feb","Mar","Apr"),
+                     colMeans(CM_ALL_M_CAST)[3:10],
+                     
+                     se_CM_month)
+colnames(se_month_CM)<- c("Month","Mean","SE")
+se_month_CM$Lower <- se_month_CM$Mean - se_month_CM$SE
+se_month_CM$Upper <- se_month_CM$Mean + se_month_CM$SE
+se_month_CM$Important <- 0
+se_month_CM$Important <- as.factor(se_month_CM$Important)
+
+se_month_CM$Month <- factor(se_month_CM$Month,
+                           levels = unique(se_month_CM$Month))
+
+
+Monthly_mean_1<-ggplot(se_month_CM, aes(x= as.factor(Month), y= Mean,
+                       group=Month))+
+         geom_bar(stat='identity',aes(fill=Important))+
+  geom_errorbar(aes(ymin=Lower, ymax=Upper, width=0.2))+
+  scale_fill_manual(values = c('gray84','dodgerblue4','firebrick3'))+
+  theme_bw()+theme_Publication()+ xlab("Month") +
+  guides(fill=FALSE)
+  
+
+###Boxplot- version 2
+CM_ALL_M_CAST
+colnames(CM_ALL_M_CAST)[3:10]<- c("Sep","Oct","Nov",
+                         "Dec","Jan","Feb","Mar","Apr")
+CM_ALL_M_MELT <- melt(CM_ALL_M_CAST[,3:10])
+
+
+colnames(CM_ALL_M_MELT) <- c('Month',"Tmin")
+
+CM_ALL_M_MELT $Month <- factor(CM_ALL_M_MELT $Month,
+                            levels = unique(CM_ALL_M_MELT $Month))
+
+
+CM_ALL_M_MELT$Important = 0
+CM_ALL_M_MELT$Important[CM_ALL_M_MELT$Month =="Mar"]=1
+CM_ALL_M_MELT$Important[CM_ALL_M_MELT$Month =="Sep"]=2
+
+colnames(CM_ALL_M_MELT) <- c('Month',"Tmin",'Important')
+
+
+M_TEMP_CM<-ggplot(CM_ALL_M_MELT, aes(x= Month, y= Tmin))+
+  geom_boxplot(aes(fill=as.factor(Important)))+
+  scale_fill_manual(values = c('gray84','dodgerblue4','firebrick3'))+
+  theme_bw()+theme_Publication()+ xlab("Month") +
+  guides(fill=FALSE)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+
+
+grid.arrange(M_VIP_CM, M_RC_CM, M_TEMP_CM,ncol=1)
+
+
+
+
+
+
+
 
 
 
@@ -110,107 +202,216 @@ CM_CAST_ALL <- cbind(CM_CAST_ALL[,1], CM_CAST)
 
 CM.first.spring$julian
 
-###ACTUAL ANALYSIS OF CODLING MOTH (Julian day)
-###
-CM_PLS <- read.csv("CM_MANUAL_JULIAN_PLS.csv",stringsAsFactors = FALSE)
 
 
-###SMOOTHING IT OUT FOR EACH YEAR - EXAMPLE
-julian_day <-(c(244:365,1:120 ))
-
-JULIAN_DAY_TEMP_CM <- cbind.data.frame(colnames(CM_PLS[,3:244]),
-                                 t(CM_PLS[1,3:244]),
-                                as.vector(smooth(
-                                   as.vector(t(CM_PLS[1,3:244])),
-                                   twiceit=TRUE)))
-rownames(JULIAN_DAY_TEMP_CM) <- seq(1, length(julian_day))
-colnames(JULIAN_DAY_TEMP_CM)<-c('JD','tmin','smooth')
 
 
-ggplot(JULIAN_DAY_TEMP_CM , 
-       aes(x= JD, y= tmin,group=1))+
-  geom_point()+
-  geom_line()+
-  geom_point(aes(x= JD,y=smooth),col='red')+
-  geom_line(aes(x= JD,y=smooth),col='red')
 
-###SMOOTHING 
 
-Smoothed_df <-matrix(NA, nrow = 33, ncol = 242)
 
-for (i in seq(1,33)){
-  temp <- CM_PLS[i,]
-  Smoothed_df[i,]<-  as.vector(smooth(
-    as.vector(t(temp[,3:244])), twiceit=TRUE))
+
+
+
+
+
+
+
+
+
+
+
+###WEEKLY
+###Only looking at tmin
+temp.dat.tmin <- temp.main.dat2[, c(1,5,8,9)]
+
+temp.dat_W_CM <- subset(temp.dat.tmin, temp.dat.tmin$year > 1982 &
+                          temp.dat.tmin$year < 2017)
+
+temp.dat_W_CM$Julian <- yday(temp.dat_W_CM$Date)
+###The leap years between 1983 - 2016
+###1984, 1988, 1992, 1996, 2000,2004, 2008,2012,2016
+
+
+LEAP_Y <- seq(1984, 2016, by = 4)
+no_months <- seq(5,8, by =1)
+LEAP_YEAR_temp_W_CM <-subset(temp.dat_W_CM ,temp.dat_W_CM $year %in% LEAP_Y)
+LEAP_YEAR_temp_W_CM <- subset(LEAP_YEAR_temp_W_CM,LEAP_YEAR_temp_W_CM$Julian != 60)
+LEAP_YEAR_temp_W_CM <- subset(LEAP_YEAR_temp_W_CM,!(
+                              LEAP_YEAR_temp_W_CM$month %in% no_months ))
+
+
+
+NONLEAP_temp_W_CM <- subset(temp.dat_W_CM, !(temp.dat_W_CM$year %in% LEAP_Y))
+NONLEAP_temp_W_CM <- subset(NONLEAP_temp_W_CM,!(
+                                NONLEAP_temp_W_CM$month %in% no_months))
+
+temp_W_CM_final <- rbind(NONLEAP_temp_W_CM , LEAP_YEAR_temp_W_CM)
+       
+
+temp_W_CM_final <- temp_W_CM_final[order(temp_W_CM_final$Date),] 
+rownames(temp_W_CM_final) <- seq(1,8228)
+temp_W_CM_final <- temp_W_CM_final[-c(1:100), ]
+rownames(temp_W_CM_final) <- seq(1,nrow(temp_W_CM_final))
+temp_W_CM_final <- temp_W_CM_final[-c(8007: 8128),]
+
+#Dear jesus, i'm so sorry oh my god this is terrible code
+
+mavg.7day <- SMA(temp_W_CM_final$tmin, n=7)  # Simple moving average
+mavg.11day <- SMA(temp_W_CM_final$tmin, n = 11) #Simple moving average
+mavg.15day <- SMA(temp_W_CM_final$tmin, n = 15) #Simple moving average
+
+CM_mavg_7<-cbind.data.frame(temp_W_CM_final$Date,mavg.7day)
+CM_mavg_11 <- cbind.data.frame(temp_W_CM_final$Date, mavg.11day)
+CM_mavg_15<- cbind.data.frame(temp_W_CM_final$Date, mavg.15day)
+
+CM_mavg_7<- CM_mavg_7[-c(1:20),]
+CM_mavg_11<- CM_mavg_11[-c(1:20),]
+CM_mavg_15 <- CM_mavg_15[-c(1:20),]
+plot(as.Date(CM_mavg_7[1:242,1],format="%Y-%m-%d"),
+     CM_mavg_7[1:242,2],type='l')
+lines(as.Date(CM_mavg_7[1:242,1],format="%Y-%m-%d"),CM_mavg_11[1:242,2],type='l',col='red')
+lines(as.Date(CM_mavg_7[1:242,1],format="%Y-%m-%d"),CM_mavg_15[1:242,2],type='l',col='blue')
+
+CM_mavg_7$id <- rep(seq(1,242),33)
+CM_mavg_7$year <- as.numeric(format(CM_mavg_7$`temp_W_CM_final$Date`, '%Y'))
+colnames(CM_mavg_7)<- c("Date","Tmin","ID","Year")
+
+
+WEEK_CM_7_CAST <- dcast(CM_mavg_7,Year~ID)
+
+CM_mavg_7_2 <- CM_mavg_7[,c(4,3,2)]
+
+SPREADED_CM_1<-spread(CM_mavg_7_2, ID, Tmin)
+SPREADED_CM_a <- na.omit(SPREADED_CM_1[,2:123])
+SPREADED_CM_b <- na.omit(SPREADED_CM_1[,124:243])
+
+SPREADED_CM_FINAL <- cbind.data.frame(seq(1984,2016),CM.first.spring$julian,
+                                      SPREADED_CM_a, SPREADED_CM_b)
+colnames(SPREADED_CM_FINAL) <- c("Year","Julian",as.Date(Date_CM))
+
+Date_CM<- (seq(as.Date("1984/9/1"),
+                                as.Date("1985/4/30"), "days"))
+
+
+mvr_SMOOTHED_7_CM<- mvr(Julian~., data =SPREADED_CM_FINAL[,c(2, 3:244)],
+                      validation='CV',scale=TRUE,method="oscorespls")
+summary(mvr_SMOOTHED_7_CM)
+
+###MAKING THE VIP GRAPH
+
+mvrmCM_VIP_SMOOTHED_7<-cbind.data.frame(c(Date_CM),
+                             VIP(mvr_SMOOTHED_7_CM,opt.comp=1))
+colnames(mvrmCM_VIP_SMOOTHED_7) <- c('Days','VIP')
+
+mvrmCM_VIP_SMOOTHED_7$greater <- ifelse(mvrmCM_VIP_SMOOTHED_7$VIP >0.8, TRUE, FALSE)
+
+D7_VIP_CM<-ggplot(mvrmCM_VIP_SMOOTHED_7, aes(x= Days,y= VIP, fill = greater))+
+  geom_bar(stat= 'identity')+geom_hline(yintercept = 1)+
+  scale_fill_manual(values = c('gray84','seagreen4'))+
+  guides(fill=FALSE)+theme_Publication()+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  ggtitle("Cydia Pomonella")+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  scale_x_date(date_breaks = "1 week")
+###Regression coefficent 
+
+RC_CM_D7<-cbind.data.frame(mvrmCM_VIP_SMOOTHED_7$Day,
+                          RC(mvr_SMOOTHED_7_CM, opt.comp=1))
+colnames(RC_CM_D7)<- c("Day","RC")
+
+barplot(RC_CM_D7$RC)
+
+RC_VIP_CM_D7<- cbind.data.frame(mvrmCM_VIP_SMOOTHED_7[,2:3], RC_CM_D7)
+
+RC_VIP_CM_D7$negopos<- 'insig'
+RC_VIP_CM_D7$negopos[RC_VIP_CM_D7$greater == TRUE & RC_VIP_CM_D7$RC > 0 ]<- 'POS'
+RC_VIP_CM_D7$negopos[RC_VIP_CM_D7$greater == TRUE & 
+                       RC_VIP_CM_D7$RC < 0 ]<- 'NEG'
+
+D7_RC_CM <- ggplot(RC_VIP_CM_D7, aes(x= Day, y= RC))+ 
+  geom_bar(aes(fill = negopos),stat='identity')+
+  scale_fill_manual(values = c('gray84','dodgerblue4','firebrick3'))+
+  theme_Publication()+
+  geom_hline(yintercept = 0)+
+  guides(fill=FALSE)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  scale_x_date(date_breaks = "1 week")+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
   
-}
 
-SMOOTH_CM_data<-  cbind.data.frame(seq(1984,2016),
-                                   CM.first.spring$julian,
-                                   Smoothed_df)
-colnames(SMOOTH_CM_data)<- c("Year","Julian",
-                             colnames(CM_PLS[,3:244]))
+grid.arrange(D7_VIP_CM, D7_RC_CM,ncol=1)
 
-
-CM_month <- plsr(Julian~., data = SMOOTH_CM_data[,2:244],
-                 validation = "CV",scale=TRUE,
-                 method="oscorespls")
-summary(CM_month)
-
-VIP_CM_SMOOTH<-data.frame(julian_day,VIP(CM_month,opt.comp=1))
-
-VIP_CM_SMOOTH$realdate <- (seq(as.Date("1984/9/1"),
-                               as.Date("1985/4/30"), "days"))
-colnames(VIP_CM_SMOOTH) <- c('julian','vip','realdate')
-VIP_CM_SMOOTH$great <- ifelse(VIP_CM_SMOOTH$vip >= 1, TRUE,FALSE)
-
-ggplot(VIP_CM_SMOOTH, 
-  aes(x = realdate, y= vip, fill = great))+geom_bar(stat='identity',
-  color='black')+
-  theme(axis.text.x = element_text(angle = 45, size = 9))+
-  theme(axis.ticks.length=unit(0.5,"cm"))+
-  scale_x_date(date_breaks = "2 week", date_labels =  "%b %d") +
-  geom_hline(yintercept=1)+
-  scale_fill_manual(values = c('grey','red'))+theme_bw()
-
-mvrCM<- mvr(Julian~., data = CM_PLS[,2:244],validation='CV',scale=TRUE,method="oscorespls")
-summary(mvrCM)
-mvrCMVIP<-VIP(mvrCM,opt.comp=3, p= 242)
+#######################################
+########################################
+####Try smoothing out by 11
 
 
-mvrVIP_CM_SMOOTH<-data.frame(
-  julian_day,mvrCMVIP)
-
-mvrVIP_CM_SMOOTH$realdate <- (seq(as.Date("1984/9/1"),
-                               as.Date("1985/4/30"), "days"))
-colnames(mvrVIP_CM_SMOOTH) <- c('julian','vip','realdate')
-mvrVIP_CM_SMOOTH$great <- 
-  ifelse(mvrVIP_CM_SMOOTH$vip >= 1, TRUE,FALSE)
-
-ggplot(mvrVIP_CM_SMOOTH, 
-       aes(x = realdate, y= vip, fill = great))+geom_bar(stat='identity',
-                                                         color='black')+
-  theme(axis.text.x = element_text(angle = 45, size = 9))+
-  theme(axis.ticks.length=unit(0.5,"cm"))+
-  scale_x_date(date_breaks = "2 week", date_labels =  "%b %d") +
-  geom_hline(yintercept=1)+
-  scale_fill_manual(values = c('grey','red'))+theme_bw()
+CM_mavg_11$id <- rep(seq(1,242),33)
+CM_mavg_11$year <- as.numeric(format(CM_mavg_11$`temp_W_CM_final$Date`, '%Y'))
+colnames(CM_mavg_11)<- c("Date","Tmin","ID","Year")
 
 
-RC_CM_SMOOTH<-data.frame(julian_day,
-                         RC(mvrCM, opt.comp=1))
+WEEK_CM_11_CAST <- dcast(CM_mavg_11,Year~ID)
 
-RC_CM_SMOOTH$realdate <- (seq(as.Date("1984/9/1"),
-                               as.Date("1985/4/30"), "days"))
+CM_mavg_11_2 <- CM_mavg_11[,c(4,3,2)]
 
-colnames(RC_CM_SMOOTH)<- c('Julian','RC','Date')
+SPREADED_CM11_1<-spread(CM_mavg_11_2, ID, Tmin)
+SPREADED_CM11_a <- na.omit(SPREADED_CM11_1[,2:123])
+SPREADED_CM11_b <- na.omit(SPREADED_CM11_1[,124:243])
+
+SPREADED_CM11_FINAL <- cbind.data.frame(seq(1984,2016),CM.first.spring$julian,
+                                      SPREADED_CM11_a, SPREADED_CM11_b)
+colnames(SPREADED_CM11_FINAL) <- c("Year","Julian",as.Date(Date_CM))
+
+Date_CM<- (seq(as.Date("1984/9/1"),
+               as.Date("1985/4/30"), "days"))
 
 
-ggplot(RC_CM_SMOOTH, 
-  aes(x = Date, y= RC))+
-  geom_point()+geom_line()+
-  theme(axis.text.x = element_text(angle = 45, size = 9))+
-  scale_x_date(date_breaks = "2 week", date_labels =  "%b %d")+
-  geom_hline(yintercept =0)+
-  theme_bw()
+mvr_SMOOTHED_11_CM<- mvr(Julian~., data =SPREADED_CM11_FINAL[,c(2, 3:244)],
+                        validation='CV',scale=TRUE,method="oscorespls")
+summary(mvr_SMOOTHED_11_CM)
+
+###MAKING THE VIP GRAPH
+
+mvrmCM_VIP_SMOOTHED_11<-cbind.data.frame(c(Date_CM),
+                                        VIP(mvr_SMOOTHED_11_CM,opt.comp=1))
+colnames(mvrmCM_VIP_SMOOTHED_11) <- c('Days','VIP')
+
+mvrmCM_VIP_SMOOTHED_11$greater <- ifelse(mvrmCM_VIP_SMOOTHED_11$VIP >1, TRUE, FALSE)
+
+D11_VIP_CM<-ggplot(mvrmCM_VIP_SMOOTHED_11, aes(x= Days,y= VIP, fill = greater))+
+  geom_bar(stat= 'identity')+geom_hline(yintercept = 1)+
+  scale_fill_manual(values = c('gray84','seagreen4'))+
+  guides(fill=FALSE)+theme_Publication()+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  ggtitle("Cydia Pomonella")+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  scale_x_date(date_breaks = "1 week")
+###Regression coefficent 
+
+RC_CM_D7<-cbind.data.frame(mvrmCM_VIP_SMOOTHED_7$Day,
+                           RC(mvr_SMOOTHED_7_CM, opt.comp=1))
+colnames(RC_CM_D7)<- c("Day","RC")
+
+barplot(RC_CM_D7$RC)
+
+RC_VIP_CM_D7<- cbind.data.frame(mvrmCM_VIP_SMOOTHED_7[,2:3], RC_CM_D7)
+
+RC_VIP_CM_D7$negopos<- 'insig'
+RC_VIP_CM_D7$negopos[RC_VIP_CM_D7$greater == TRUE & RC_VIP_CM_D7$RC > 0 ]<- 'POS'
+RC_VIP_CM_D7$negopos[RC_VIP_CM_D7$greater == TRUE & 
+                       RC_VIP_CM_D7$RC < 0 ]<- 'NEG'
+
+D7_RC_CM <- ggplot(RC_VIP_CM_D7, aes(x= Day, y= RC))+ 
+  geom_bar(aes(fill = negopos),stat='identity')+
+  scale_fill_manual(values = c('gray84','dodgerblue4','firebrick3'))+
+  theme_Publication()+
+  geom_hline(yintercept = 0)+
+  guides(fill=FALSE)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  scale_x_date(date_breaks = "1 week")+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+grid.arrange(D_VIP_CM, D7_RC_CM,ncol=1)
 
